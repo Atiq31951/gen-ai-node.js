@@ -1,3 +1,4 @@
-import { encoding_for_model } from "tiktoken";
+import { encoding_for_model, TiktokenModel } from "tiktoken";
+import { getEnv } from "../utils/getEnv";
 
-export const encoder = encoding_for_model(process.env.OPENAI_MODEL);
+export const encoder = encoding_for_model(getEnv("OPENAI_MODEL") as TiktokenModel);
