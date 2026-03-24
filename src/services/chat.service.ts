@@ -1,7 +1,12 @@
 import { OpenAI } from "openai";
 import { openAI, openAiModel } from "../lib/openai";
-import { context, deleteOlderContexts } from "../utils/contextManager";
+import {
+  getContext,
+  deleteOlderContexts,
+  addNewContext,
+} from "../utils/contextManager";
 import { getEnv } from "../utils/getEnv";
+import { toolDefinitions, dispatchToolCall } from "../tools";
 
 export const createChatCompletion = async (
   userInput: string,
@@ -11,57 +16,73 @@ export const createChatCompletion = async (
     content: userInput,
   };
 
-  const response = await openAI.chat.completions.create({
+  addNewContext([userContext]);
+
+  let response = await openAI.chat.completions.create({
     model: openAiModel,
-    messages: [...context, userContext],
-    tools: [
-      {
-        type: "function",
-        function: {
-          name: "getTimeDate",
-          description: "Get the current time",
-          parameters: {
-            type: "object",
-            properties: {
-              timezone: {
-                type: "string",
-                description: "The timezone to get the current time for",
-              },
-              agoDay: {
-                type: "number",
-                description: "The number of days ago to get the time for",
-              },
-            },
-            required: [],
-          },
-        },
-      },
-    ],
+    messages: getContext(),
+    tools: toolDefinitions,
     tool_choice: "auto",
   });
+
+  if (response.choices[0].finish_reason === "tool_calls") {
+    addNewContext([
+      {
+        role: "assistant",
+        content: response.choices[0].message.content,
+        tool_calls: response.choices[0].message.tool_calls,
+      },
+    ]);
+  }
 
   const willInvokeFunction = response.choices[0].finish_reason === "tool_calls";
 
   if (willInvokeFunction) {
     const toolCalls = response.choices[0].message.tool_calls;
     if (toolCalls && toolCalls.length > 0) {
-      const firstToolCall = toolCalls[0];
-      if (firstToolCall.type === 'function') {
-        const functionName = firstToolCall.function.name;
-        const functionArgs = firstToolCall.function.arguments;
+      for (const toolCall of toolCalls) {
+        if (toolCall.type === "function") {
+          const result = await dispatchToolCall({
+            functionName: toolCall.function.name,
+            arguments: {
+              ...JSON.parse(toolCall.function.arguments),
+              tool_call_id: toolCall.id,
+            },
+          });
 
-        
+          const content =
+            typeof result === "string"
+              ? result
+              : JSON.stringify(result ?? "null");
+          addNewContext([
+            {
+              role: "tool",
+              tool_call_id: toolCall.id,
+              content,
+            },
+          ]);
+        }
+
+        console.log("Context", getContext());
+
+        response = await openAI.chat.completions.create({
+          model: openAiModel,
+          messages: getContext(),
+        });
       }
     }
   }
 
-  context.push(userContext);
+  console.log("willInvokeFunction ====> ", willInvokeFunction, getContext());
 
-  const assistantContext: OpenAI.Chat.Completions.ChatCompletionMessageParam = {
-    role: "assistant",
-    content: response.choices[0].message.content || "",
-  };
-  context.push(assistantContext);
+  if (!willInvokeFunction) {
+    addNewContext([
+      {
+        role: "assistant",
+        content: response.choices[0].message.content || "",
+      },
+    ]);
+  }
 
   console.log(response.choices[0].message.content);
 
