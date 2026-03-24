@@ -1,7 +1,7 @@
 import { OpenAI } from "openai";
 
-import { dateTimeTools } from "./dateTime.tools";
-import { orderTools } from "./order.tools";
+import { dateTimeTools } from "./schemas/date";
+import { orderTools } from "./schemas/order";
 
 export type ToolSlice = {
   definition: OpenAI.Chat.Completions.ChatCompletionTool;
@@ -20,9 +20,10 @@ export const toolDefinitions = allTools.map((t) => t.definition);
 
 const registry = new Map(
   allTools.map((t) => [
-    (t.definition as { type: "function"; function: { name: string } }).function.name,
+    (t.definition as { type: "function"; function: { name: string } }).function
+      .name,
     t.handler,
-  ])
+  ]),
 );
 
 export const dispatchToolCall = async (payload: {

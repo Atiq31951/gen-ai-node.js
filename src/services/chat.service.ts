@@ -44,10 +44,7 @@ export const createChatCompletion = async (
         if (toolCall.type === "function") {
           const result = await dispatchToolCall({
             functionName: toolCall.function.name,
-            arguments: {
-              ...JSON.parse(toolCall.function.arguments),
-              tool_call_id: toolCall.id,
-            },
+            arguments: toolCall.function.arguments,
           });
 
           const content =
@@ -62,20 +59,21 @@ export const createChatCompletion = async (
             },
           ]);
         }
-
-        console.log("Context", getContext());
-
-        response = await openAI.chat.completions.create({
-          model: openAiModel,
-          messages: getContext(),
-        });
       }
+
+      response = await openAI.chat.completions.create({
+        model: openAiModel,
+        messages: getContext(),
+      });
+
+      addNewContext([
+        {
+          role: "assistant",
+          content: response.choices[0].message.content || "",
+        },
+      ]);
     }
-  }
-
-  console.log("willInvokeFunction ====> ", willInvokeFunction, getContext());
-
-  if (!willInvokeFunction) {
+  } else {
     addNewContext([
       {
         role: "assistant",

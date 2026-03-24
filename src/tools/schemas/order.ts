@@ -1,4 +1,5 @@
-import { ToolSlice } from "./index";
+import { ToolSlice } from "../index";
+import { getOrderDetailsHandler } from "../handlers/order";
 
 export const orderTools: ToolSlice[] = [
   {
@@ -14,19 +15,19 @@ export const orderTools: ToolSlice[] = [
               type: "string",
               description: "The order ID to get details for",
             },
+            userId: {
+              type: "string",
+              description: "The user ID to get details for",
+            },
+            status: {
+              type: "string",
+              description: "The status to get details for",
+            },
           },
           required: [],
         },
       },
     },
-    handler: async (args: Record<string, unknown>) => {
-      const { orderId } = args as { orderId: string };
-      // TODO: Implement order details retrieval
-      return {
-        orderId,
-        status: "on the way",
-        estimatedDelivery: "2025-10-20",
-      };
-    },
+    handler: getOrderDetailsHandler,
   },
 ];
