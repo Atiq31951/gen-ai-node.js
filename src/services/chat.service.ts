@@ -1,4 +1,3 @@
-import { OpenAI } from "openai";
 import { openAI, openAiModel } from "../lib/openai";
 import {
   getContext,
@@ -9,24 +8,21 @@ import { getEnv } from "../utils/getEnv";
 import { toolDefinitions, dispatchToolCall } from "../tools";
 
 export const createChatCompletion = async (
+  roomId: string,
   userInput: string,
-): Promise<void> => {
-  const userContext: OpenAI.Chat.Completions.ChatCompletionMessageParam = {
-    role: "user",
-    content: userInput,
-  };
-
-  addNewContext([userContext]);
+  userName: string = "User",
+): Promise<string> => {
+  addNewContext(roomId, [{ role: "user", content: `[${userName}]: ${userInput}` }]);
 
   let response = await openAI.chat.completions.create({
     model: openAiModel,
-    messages: getContext(),
+    messages: getContext(roomId),
     tools: toolDefinitions,
     tool_choice: "auto",
   });
 
   if (response.choices[0].finish_reason === "tool_calls") {
-    addNewContext([
+    addNewContext(roomId, [
       {
         role: "assistant",
         content: response.choices[0].message.content,
@@ -51,7 +47,7 @@ export const createChatCompletion = async (
             typeof result === "string"
               ? result
               : JSON.stringify(result ?? "null");
-          addNewContext([
+          addNewContext(roomId, [
             {
               role: "tool",
               tool_call_id: toolCall.id,
@@ -63,10 +59,10 @@ export const createChatCompletion = async (
 
       response = await openAI.chat.completions.create({
         model: openAiModel,
-        messages: getContext(),
+        messages: getContext(roomId),
       });
 
-      addNewContext([
+      addNewContext(roomId, [
         {
           role: "assistant",
           content: response.choices[0].message.content || "",
@@ -74,7 +70,7 @@ export const createChatCompletion = async (
       ]);
     }
   } else {
-    addNewContext([
+    addNewContext(roomId, [
       {
         role: "assistant",
         content: response.choices[0].message.content || "",
@@ -82,12 +78,12 @@ export const createChatCompletion = async (
     ]);
   }
 
-  console.log(response.choices[0].message.content);
-
   if (
     response.usage?.total_tokens &&
     response.usage.total_tokens > (getEnv("MAX_GPT_TOKEN") as number)
   ) {
-    deleteOlderContexts();
+    deleteOlderContexts(roomId);
   }
+
+  return response.choices[0].message.content || "";
 };

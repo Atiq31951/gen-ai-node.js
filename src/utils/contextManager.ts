@@ -3,32 +3,35 @@ import { encoder } from "../lib/encoder";
 import { systemPrompt } from "./context.content";
 import { getEnv } from "./getEnv";
 
-const context: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
-  {
-    role: "system",
-    content: systemPrompt,
-  },
-];
+type Message = OpenAI.Chat.Completions.ChatCompletionMessageParam;
 
-export const getContext = () => context;
+// Per-room context store
+const rooms = new Map<string, Message[]>();
 
-export const addNewContext = (
-  newContext: OpenAI.Chat.Completions.ChatCompletionMessageParam[],
-) => {
+const getOrCreateRoom = (roomId: string): Message[] => {
+  if (!rooms.has(roomId)) {
+    rooms.set(roomId, [{ role: "system", content: systemPrompt }]);
+  }
+  return rooms.get(roomId)!;
+};
+
+export const getContext = (roomId: string): Message[] =>
+  getOrCreateRoom(roomId);
+
+export const addNewContext = (roomId: string, newContext: Message[]): void => {
+  const context = getOrCreateRoom(roomId);
   context.push(...(Array.isArray(newContext) ? newContext : [newContext]));
 };
 
-const setContext = (
-  newContext: OpenAI.Chat.Completions.ChatCompletionMessageParam[],
-) => {
-  // clearing the context
+const setContext = (roomId: string, newContext: Message[]): void => {
+  const context = getOrCreateRoom(roomId);
   context.length = 0;
   context.push(...newContext);
 };
 
-export const getContextLength = (): number => {
+export const getContextLength = (roomId: string): number => {
   let length = 0;
-  getContext().forEach((item) => {
+  getContext(roomId).forEach((item) => {
     if (typeof item.content === "string") {
       length += encoder.encode(item.content).length;
     } else if (Array.isArray(item.content)) {
@@ -42,18 +45,17 @@ export const getContextLength = (): number => {
   return length;
 };
 
-export const deleteOlderContexts = (): void => {
-  let contextLength = getContextLength();
+export const deleteOlderContexts = (roomId: string): void => {
+  let contextLength = getContextLength(roomId);
   let pos = 0;
-  const newContext: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [...getContext()];
+  const newContext: Message[] = [...getContext(roomId)];
   while (contextLength > (getEnv("MAX_GPT_TOKEN") as number)) {
-    console.log("Deleting older contexts", newContext[pos]);
     if (newContext[pos].role === "system") {
       pos++;
       continue;
     }
     newContext.splice(pos, 1);
-    contextLength = getContextLength();
+    contextLength = getContextLength(roomId);
   }
-  setContext(newContext);
+  setContext(roomId, newContext);
 };

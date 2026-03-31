@@ -2,6 +2,7 @@ import { OpenAI } from "openai";
 
 import { dateTimeTools } from "./schemas/date";
 import { orderTools } from "./schemas/order";
+import { productTools } from "./schemas/product";
 
 export type ToolSlice = {
   definition: OpenAI.Chat.Completions.ChatCompletionTool;
@@ -12,7 +13,7 @@ export type ToolSlice = {
 const allTools: ToolSlice[] = [
   ...dateTimeTools,
   ...orderTools,
-  // ...productTools,
+  ...productTools,
 ];
 // ------------------------------------------------
 
