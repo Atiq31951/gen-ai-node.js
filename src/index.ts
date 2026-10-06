@@ -14,16 +14,6 @@ app.use(express.json());
 // REST: load chat history for a room
 app.get("/api/chat/rooms/:roomId/messages", (req, res) => {
   const { roomId } = req.params;
-  const userId = req.headers["x-user-id"];
-
-
-  console.log("Ki re asisos");
-
-  if (!userId) {
-    res.status(401).json({ error: "Unauthorized" });
-    return;
-  }
-
   const messages = getContext(roomId).filter((m) => m.role !== "system");
   res.json({ messages });
 });
@@ -36,22 +26,16 @@ const io = new Server(httpServer, {
 });
 
 io.on("connection", (socket) => {
-  console.log("Connection create korsos?");
   const auth = (socket.handshake.auth || {}) as Record<string, any>;
   const query = (socket.handshake.query || {}) as Record<string, any>;
 
-  const roomId = (auth.roomId || query.roomId) as string;
-  const userId = (auth.userId || query.userId) as string;
-  const userName = (auth.userName || query.userName || "User") as string;
-
-  if (!roomId || !userId) {
-    console.warn(`[Connection Rejected] Missing roomId or userId. Auth:`, auth, `Query:`, query);
-    socket.disconnect();
-    return;
-  }
+  // ডিফল্ট বা ডামি ভ্যালু ফলব্যাক হিসেবে ব্যবহার করা হচ্ছে যাতে অথেনটিকেশন ছাড়া সরাসরি কানেক্ট হতে পারে
+  const roomId = (auth.roomId || query.roomId || "default-room") as string;
+  const userId = (auth.userId || query.userId || `user-${socket.id.substring(0, 5)}`) as string;
+  const userName = (auth.userName || query.userName || `Guest-${socket.id.substring(0, 4)}`) as string;
 
   socket.join(roomId);
-  console.log(`User "${userName}" (${userId}) joined room: ${roomId}`);
+  console.log(`[Socket Connected] User: "${userName}" (${userId}) | Room: "${roomId}" | SocketID: ${socket.id}`);
 
   // যেকোনো ইনকামিং ইভেন্ট ও মেসেজ লগ করার জন্য
   socket.onAny((event, ...args) => {
@@ -63,7 +47,11 @@ io.on("connection", (socket) => {
     try {
       const reply = await createChatCompletion(roomId, userMessage, userName);
       console.log(`[AI Reply Generated] Room "${roomId}":`, reply);
-      io.to(roomId).emit("reply", { from: "assistant", text: reply });
+      
+      const payload = { from: "assistant", text: reply };
+      // রুমে ব্রডকাস্ট এবং সেন্ডার সকেটে সরাসরি পাঠানো (নিশ্চিত ডেলিভারির জন্য)
+      socket.emit("reply", payload);
+      socket.to(roomId).emit("reply", payload);
     } catch (err) {
       console.error("[Chat Error]:", err);
       socket.emit("error", "Something went wrong. Please try again.");
